@@ -6,6 +6,10 @@ name = "pypi"
 [packages]
 sqlalchemy = "*"
 alembic = "*"
+tabulate = "*"
+sqlalchemy-utils ="*"
+click = "*"
+tabulate = "*"
 
 [dev-packages]
 
