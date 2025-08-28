@@ -43,7 +43,7 @@ class Loan(Base):
     borrower_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
-    status = Column(Enum(LoanStatus), nullable=False, default=LoanStatus.requested)
+    status = Column(Enum(LoanStatus), nullable=False, default=lambda: LoanStatus.requested)
     total_cost = Column(Float, nullable=False, default=0.0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
