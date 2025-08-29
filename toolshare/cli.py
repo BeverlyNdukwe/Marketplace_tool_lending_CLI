@@ -1,116 +1,111 @@
-import click
-from datetime import datetime
-from toolshare.db import init_db, SessionLocal
-from toolshare import services
-from toolshare.models import LoanStatus
+import sys
+from sqlalchemy.orm import Session
+from .db import get_db, init_db
+from . import services
 
-@click.group()
-def cli():
-    """ToolShare CLI"""
-    pass
 
-@cli.command()
-def initdb():
-    """Initialize the database."""
-    init_db()
-    click.echo("Database initialized successfully.")
+def _prompt_choice(prompt, choices):
+    """Ask the user to pick from a list of choices."""
+    print(f"\n{prompt}")
+    for i, choice in enumerate(choices, start=1):
+        print(f"{i}. {choice}")
+    while True:
+        try:
+            selection = int(input("Enter number: "))
+            if 1 <= selection <= len(choices):
+                return choices[selection - 1]
+            else:
+                print("Invalid choice, try again.")
+        except ValueError:
+            print("Please enter a number.")
 
-@cli.command()
-@click.argument("username")
-@click.argument("password")
-def add_user(username, password):
-    """Add a new user."""
-    db = SessionLocal()
-    try:
+
+def add_user():
+    with next(get_db()) as db:
+        username = input("Enter username: ")
+        password = input("Enter password: ")
         user = services.create_user(db, username, password)
-        click.echo(f"Created user {user.username} with ID {user.id}")
-    except Exception as e:
-        click.echo(f"Error: {e}")
-        db.rollback()
-    finally:
-        db.close()
+        print(f"User created: {user.username} (id={user.id})")
 
-@cli.command()
+
 def list_users():
-    """List all users."""
-    db = SessionLocal()
-    users = services.list_users(db)
-    for user in users:
-        click.echo(f"{user.id}: {user.username}")
-    db.close()
+    with next(get_db()) as db:
+        users = services.list_users(db)
+        print("\n--- Users ---")
+        for u in users:
+            print(f"[{u.id}] {u.username}")
 
-@cli.command()
-@click.argument("owner_id", type=int)
-@click.argument("title")
-@click.argument("daily_rate", type=float)
-@click.option("--description", default="")
-@click.option("--category", default="")
-@click.option("--condition", default="good")
-def add_tool(owner_id, title, daily_rate, description, category, condition):
-    """Add a new tool."""
-    db = SessionLocal()
-    try:
-        tool = services.create_tool(db, owner_id, title, daily_rate, description, category, condition)
-        click.echo(f"Created tool {tool.title} with ID {tool.id}")
-    except Exception as e:
-        click.echo(f"Error: {e}")
-        db.rollback()
-    finally:
-        db.close()
 
-@cli.command()
+def add_tool():
+    with next(get_db()) as db:
+        owner_id = int(input("Enter owner ID: "))
+        title = input("Enter tool title: ")
+        rate = float(input("Enter daily rate: "))
+        desc = input("Enter description: ")
+        category = input("Enter category: ")
+        condition = input("Enter condition (good/new/old): ")
+        tool = services.create_tool(db, owner_id, title, rate, desc, category, condition)
+        print(f"Tool created: {tool.title} (id={tool.id})")
+
+
 def list_tools():
-    """List all tools."""
-    db = SessionLocal()
-    tools = services.list_tools(db)
-    for tool in tools:
-        click.echo(f"{tool.id}: {tool.title} (Owner ID: {tool.owner_id})")
-    db.close()
+    with next(get_db()) as db:
+        tools = services.list_tools(db)
+        print("\n--- Tools ---")
+        for t in tools:
+            print(f"[{t.id}] {t.title} - Owner {t.owner_id}, {t.daily_rate}/day")
 
-@cli.command()
-@click.argument("tool_id", type=int)
-@click.argument("borrower_id", type=int)
-@click.argument("start_date")
-@click.argument("end_date")
-def create_loan(tool_id, borrower_id, start_date, end_date):
-    """Create a loan for a tool."""
-    db = SessionLocal()
-    try:
-        loan = services.create_loan(db, tool_id, borrower_id, start_date, end_date)
-        click.echo(f"Created loan ID {loan.id} from {loan.start_date} to {loan.end_date}, Total cost: {loan.total_cost}")
-    except Exception as e:
-        click.echo(f"Error: {e}")
-        db.rollback()
-    finally:
-        db.close()
 
-@cli.command()
+def create_loan():
+    with next(get_db()) as db:
+        tool_id = int(input("Enter tool ID: "))
+        borrower_id = int(input("Enter borrower ID: "))
+        start = input("Enter start date (YYYY-MM-DD): ")
+        end = input("Enter end date (YYYY-MM-DD): ")
+        loan = services.create_loan(db, tool_id, borrower_id, start, end)
+        print(f"Loan created: Tool {loan.tool_id} to User {loan.borrower_id}, Total = {loan.total_cost}")
+
+
 def list_loans():
-    """List all loans."""
-    db = SessionLocal()
-    loans = services.list_loans(db)
-    for loan in loans:
-        click.echo(f"{loan.id}: Tool ID {loan.tool_id}, Borrower ID {loan.borrower_id}, Status: {loan.status.value}, Total Cost: {loan.total_cost}")
-    db.close()
+    with next(get_db()) as db:
+        loans = services.list_loans(db)
+        print("\n--- Loans ---")
+        for l in loans:
+            print(f"[{l.id}] Tool {l.tool_id} → User {l.borrower_id}, {l.start_date} to {l.end_date}, Status={l.status}, Cost={l.total_cost}")
 
-@cli.command()
-@click.argument("loan_id", type=int)
-@click.argument("new_status")
-def update_loan(loan_id, new_status):
-    """Update the status of a loan."""
-    db = SessionLocal()
-    try:
-        status_enum = LoanStatus(new_status)
-        loan = services.update_loan_status(db, loan_id, status_enum)
-        click.echo(f"Loan ID {loan.id} status updated to {loan.status.value}")
-    except ValueError as e:
-        click.echo(f"Error: {e}")
-        db.rollback()
-    except Exception as e:
-        click.echo(f"Error: {e}")
-        db.rollback()
-    finally:
-        db.close()
+
+def main_menu():
+    print(" Welcome to ToolShare CLI ")
+    print("Database initialized automatically if empty.\n")
+
+    while True:
+        choice = _prompt_choice("What would you like to do?", [
+            "Add User",
+            "List Users",
+            "Add Tool",
+            "List Tools",
+            "Create Loan",
+            "List Loans",
+            "Exit"
+        ])
+
+        if choice == "Add User":
+            add_user()
+        elif choice == "List Users":
+            list_users()
+        elif choice == "Add Tool":
+            add_tool()
+        elif choice == "List Tools":
+            list_tools()
+        elif choice == "Create Loan":
+            create_loan()
+        elif choice == "List Loans":
+            list_loans()
+        elif choice == "Exit":
+            print("Goodbye!")
+            sys.exit(0)
+
 
 if __name__ == "__main__":
-    cli()
+    init_db()
+    main_menu()
